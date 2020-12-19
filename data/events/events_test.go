@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.com/therako/universal-studios/data/customers"
 	"gitlab.com/therako/universal-studios/data/events"
-	"gitlab.com/therako/universal-studios/data/rides"
+	"gitlab.com/therako/universal-studios/data/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -30,51 +29,97 @@ var (
 func testDB(name string) *gorm.DB {
 	gormDB, _ := gorm.Open(sqlite.Open(fmt.Sprintf("file:%s?mode=memory", name)), &gorm.Config{Logger: gormLogger})
 	gormDB.Exec("PRAGMA foreign_keys = ON") // SQLite defaults to `foreign_keys = off'`
-	gormDB.AutoMigrate(&customers.Customer{})
-	gormDB.AutoMigrate(&customers.CustomerState{})
-	gormDB.AutoMigrate(&rides.Ride{})
-	gormDB.AutoMigrate(&rides.RideState{})
+	gormDB.AutoMigrate(&events.Event{})
 	return gormDB
 }
-func TestCustomerQueued(t *testing.T) {
-	t.Run("Expect update stated for adding a customer to a ride queue", func(t *testing.T) {
-		db := testDB(t.Name())
-		customer := &customers.Customer{}
-		db.Create(&customer)
-		ride := &rides.Ride{Name: "t1", Capacity: 20, RideTime: 10 * time.Minute}
-		db.Create(&ride)
-		rideState := &rides.RideState{RideID: ride.ID, CustomersInQueue: 60, EstimatedWaiting: 30 * time.Minute}
-		db.Create(&rideState)
 
-		event := events.CustomerQueued{
-			BaseEvent: events.BaseEvent{At: time.Now(), Name: "CustomerQueued"},
-			Customer:  customer,
-			Ride:      ride,
-		}
-		err := event.Apply(rides.DAO{DB: db}, customers.DAO{DB: db})
+type testEvent struct {
+	SourceID      uint
+	AggregateRoot string
+	At            time.Time
+	testData      []byte
+}
+
+func (e *testEvent) FromDBEvent(event *events.Event) (err error) { panic("Unimplemented") }
+
+func (e *testEvent) ToDBEvent() (*events.Event, error) {
+	return &events.Event{
+		SourceID:      e.SourceID,
+		AggregateRoot: e.AggregateRoot,
+		At:            e.At,
+		Data:          e.testData,
+	}, nil
+}
+
+func TestAddEvent(t *testing.T) {
+	db := testDB(t.Name())
+	dao := events.DAO{DB: db}
+	event := &testEvent{
+		SourceID:      123,
+		AggregateRoot: "test",
+		At:            time.Now(),
+		testData:      []byte("event data bytes"),
+	}
+
+	err := dao.Add(event)
+
+	assert.NilError(t, err)
+	eventInDB := &events.Event{}
+	db.Table(events.TableName).First(eventInDB)
+	assert.Equal(t, event.SourceID, eventInDB.SourceID)
+	assert.Equal(t, event.AggregateRoot, eventInDB.AggregateRoot)
+	assert.DeepEqual(t, event.At, eventInDB.At)
+}
+
+func TestEventsForSourceID(t *testing.T) {
+	t.Run("expected to return source events for the aggregate in increasing time order excluding ended events", func(t *testing.T) {
+		db := testDB(t.Name())
+		dao := events.DAO{DB: db}
+		testingSourceID := uint(123)
+		testingAggregate := "Customer"
+		eventTime := time.Now()
+		db.Create([]*events.Event{
+			{
+				SourceID:      testingSourceID,
+				AggregateRoot: testingAggregate,
+				Name:          "CustomerQueued",
+				At:            eventTime.Add(1 * time.Second),
+				EndsAt:        models.TimeP(eventTime.Add(10 * time.Second)),
+				Data:          []byte("right source delayed event start"),
+			},
+			{
+				SourceID:      987,
+				AggregateRoot: testingAggregate,
+				Name:          "CustomerQueued",
+				At:            eventTime,
+				EndsAt:        models.TimeP(eventTime.Add(10 * time.Second)),
+				Data:          []byte("wrong source event"),
+			},
+			{
+				SourceID:      testingSourceID,
+				AggregateRoot: "Ride",
+				Name:          "RideCustomerQueued",
+				At:            eventTime,
+				EndsAt:        models.TimeP(eventTime.Add(1 * time.Second)),
+				Data:          []byte("wrong aggregate event"),
+			},
+			{
+				SourceID:      testingSourceID,
+				AggregateRoot: testingAggregate,
+				Name:          "CustomerQueued",
+				At:            eventTime,
+				EndsAt:        models.TimeP(eventTime.Add(10 * time.Second)),
+				Data:          []byte("right source happening now"),
+			},
+		})
+
+		events, err := dao.EventFor(123, "Customer")
 
 		assert.NilError(t, err)
-	})
-
-	t.Run("Expect no change in ride state when customer state update has errors", func(t *testing.T) {
-		db := testDB(t.Name())
-		ride := &rides.Ride{Name: "t1", Capacity: 20, RideTime: 10 * time.Minute}
-		db.Create(&ride)
-		rideState := &rides.RideState{RideID: ride.ID, CustomersInQueue: 60, EstimatedWaiting: 30 * time.Minute}
-		db.Create(&rideState)
-
-		event := events.CustomerQueued{
-			BaseEvent: events.BaseEvent{At: time.Now(), Name: "CustomerQueued"},
-			Customer:  &customers.Customer{},
-			Ride:      ride,
-		}
-		err := event.Apply(rides.DAO{DB: db}, customers.DAO{DB: db})
-
-		assert.Error(t, err, "Customer not found")
-
-		rideStateInDB := &rides.RideState{}
-		db.Find(rideStateInDB, ride.ID)
-		assert.Equal(t, rideState.CustomersInQueue, rideStateInDB.CustomersInQueue)
-		assert.Equal(t, rideState.EstimatedWaiting, rideStateInDB.EstimatedWaiting)
+		assert.Equal(t, 2, len(events))
+		assert.Equal(t, "Customer", events[0].AggregateRoot)
+		assert.DeepEqual(t, eventTime, events[0].At)
+		assert.Equal(t, "Customer", events[1].AggregateRoot)
+		assert.DeepEqual(t, eventTime.Add(1*time.Second), events[1].At)
 	})
 }

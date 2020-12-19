@@ -1,53 +1,54 @@
 package events
 
 import (
-	"log"
 	"time"
 
-	"gitlab.com/therako/universal-studios/data/customers"
-	"gitlab.com/therako/universal-studios/data/rides"
+	"gitlab.com/therako/universal-studios/data/models"
+	"gorm.io/gorm"
 )
 
-// Event all events should adhere to this contract
-type Event interface {
-	// Events have to define what to do when they are applied using this method
-	Apply(ridesDAO rides.DAO, customersDAO customers.DAO) (err error)
+// DB table names
+const (
+	TableName = "events"
+)
+
+// EventInterface all events should adhere to this contract
+type EventInterface interface {
+	ToDBEvent() (event *Event, err error)
+	FromDBEvent(event *Event) (err error)
 }
 
-// BaseEvent hold common metadata required for all events
-type BaseEvent struct {
-	At   time.Time
-	Name string
+// Event defines all customer & ride queue activities
+type Event struct {
+	models.Model
+	SourceID      uint       `gorm:"column:source_id" json:"source_id"`
+	At            time.Time  `gorm:"column:at" json:"at"`
+	EndsAt        *time.Time `gorm:"column:ends_at" json:"ends_at"`
+	AggregateRoot string     `gorm:"column:aggregate_root" json:"aggregate_root"`
+	Name          string     `gorm:"column:name" json:"name"`
+	Data          []byte     `gorm:"column:data" json:"data"`
 }
 
-// CustomerQueued is an event representing when a customer enters a queue for a ride
-type CustomerQueued struct {
-	BaseEvent
-	Customer *customers.Customer
-	Ride     *rides.Ride
+// DAO is data access object for rides
+type DAO struct {
+	DB *gorm.DB
 }
 
-// Apply will update customer & ride view accordingly
-func (c CustomerQueued) Apply(ridesDAO rides.DAO, customersDAO customers.DAO) (err error) {
-	rideState, err := ridesDAO.QueueACustomer(c.Ride)
+// Add adds the new event to DB
+func (r DAO) Add(event EventInterface) (err error) {
+	var e *Event
+	e, err = event.ToDBEvent()
 	if err != nil {
-		return err
+		return
 	}
 
-	_, err = customersDAO.QueueFor(c.Customer, c.Ride.ID, rideState.EstimatedWaiting)
-	if err != nil {
-		if _, er := ridesDAO.UnQueueACustomers(c.Ride); er != nil {
-			log.Println(er)
-		}
-		return err
-	}
-
+	err = r.DB.Create(e).Error
 	return
 }
 
-// CustomerUnQueued is an event representing when a customer exits a queue for a ride
-type CustomerUnQueued struct {
-	BaseEvent
-	customer *customers.Customer
-	ride     *rides.Ride
+// EventFor returns all events for a source ID for an aggregate sorted by event time (At)
+func (r DAO) EventFor(id uint, aggregate string) ([]*Event, error) {
+	events := []*Event{}
+	err := r.DB.Table(TableName).Where("source_id = ? AND aggregate_root = ?", id, aggregate).Order("at asc").Find(&events).Error
+	return events, err
 }

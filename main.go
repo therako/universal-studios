@@ -11,6 +11,7 @@ import (
 
 	"gitlab.com/therako/universal-studios/api"
 	"gitlab.com/therako/universal-studios/data/customers"
+	"gitlab.com/therako/universal-studios/data/events"
 	"gitlab.com/therako/universal-studios/data/rides"
 )
 
@@ -30,9 +31,8 @@ func main() {
 
 	gormDB.Exec("PRAGMA foreign_keys = ON") // SQLite defaults to `foreign_keys = off'`
 	gormDB.AutoMigrate(&rides.Ride{})
-	gormDB.AutoMigrate(&rides.RideState{})
 	gormDB.AutoMigrate(&customers.Customer{})
-	gormDB.AutoMigrate(&customers.CustomerState{})
+	gormDB.AutoMigrate(&events.Event{})
 
 	gin.SetMode(gin.ReleaseMode)
 	router := api.New(ctx, cfg, gormDB)
