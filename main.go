@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"gitlab.com/therako/universal-studios/api"
+	"gitlab.com/therako/universal-studios/api/customers"
 	"gitlab.com/therako/universal-studios/api/rides"
 )
 
@@ -28,7 +30,9 @@ func main() {
 
 	gormDB.Exec("PRAGMA foreign_keys = ON") // SQLite defaults to `foreign_keys = off'`
 	gormDB.AutoMigrate(&rides.Ride{})
+	gormDB.AutoMigrate(&customers.Customer{})
 
+	gin.SetMode(gin.ReleaseMode)
 	router := api.New(ctx, cfg, gormDB)
 	router.Run(fmt.Sprintf(":%d", cfg.HTTPPort))
 }

@@ -49,7 +49,10 @@ func (r Rides) Add(c *gin.Context) {
 	var input AddForm
 	err := c.Bind(&input)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		c.AbortWithStatusJSON(
+			http.StatusBadRequest,
+			gin.H{"err": "Invalid request input. Expected atleast name & ride_time_secs"},
+		)
 		return
 	}
 
