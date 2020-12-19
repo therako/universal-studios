@@ -15,9 +15,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gitlab.com/therako/universal-studios/api"
-	"gitlab.com/therako/universal-studios/api/customers"
-	"gitlab.com/therako/universal-studios/api/rides"
-	"gitlab.com/therako/universal-studios/models"
+	"gitlab.com/therako/universal-studios/data/customers"
+	"gitlab.com/therako/universal-studios/data/models"
+	"gitlab.com/therako/universal-studios/data/rides"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -31,7 +31,7 @@ var (
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
 			SlowThreshold: time.Second,
-			LogLevel:      logger.Info,
+			LogLevel:      logger.Silent,
 			Colorful:      false,
 		},
 	)
@@ -78,6 +78,7 @@ func TestRideEndpoints(t *testing.T) {
 			form.Add("name", "DareDevil")
 			form.Add("desc", "Booooo")
 			form.Add("ride_time_secs", "300")
+			form.Add("capacity", "20")
 
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", "/ride/add", strings.NewReader(form.Encode()))
@@ -92,6 +93,7 @@ func TestRideEndpoints(t *testing.T) {
 			assert.Equal(t, "DareDevil", ride.Name)
 			assert.Equal(t, "Booooo", ride.Desc)
 			assert.Equal(t, 300*time.Second, ride.RideTime)
+			assert.Equal(t, uint(20), ride.Capacity)
 		})
 
 		t.Run("error on missing input", func(t *testing.T) {
@@ -104,7 +106,7 @@ func TestRideEndpoints(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, 400, w.Code)
-			assert.Equal(t, `{"err":"Invalid request input. Expected atleast name \u0026 ride_time_secs"}`, w.Body.String())
+			assert.Equal(t, `{"err":"Invalid request input. Expected atleast name, capacity \u0026 ride_time_secs"}`, w.Body.String())
 		})
 	})
 }
@@ -119,7 +121,7 @@ func TestCustomerEndpoints(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, 200, w.Code)
-		assert.Equal(t, `{"status":"added"}`, w.Body.String())
+		assert.Equal(t, `{"customer_id":1,"status":"added"}`, w.Body.String())
 
 		customer := &customers.Customer{}
 		db.Table(customers.TableName).First(&customer)
@@ -165,7 +167,7 @@ func TestCustomerEndpoints(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, 200, w.Code)
-			assert.Equal(t, `{"status":"updated"}`, w.Body.String())
+			assert.Equal(t, `{"customer_id":1,"status":"updated"}`, w.Body.String())
 
 			customer := &customers.Customer{}
 			db.Table(customers.TableName).First(&customer)

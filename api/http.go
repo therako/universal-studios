@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
-	"gitlab.com/therako/universal-studios/api/customers"
-	"gitlab.com/therako/universal-studios/api/rides"
+	"gitlab.com/therako/universal-studios/data/customers"
+	"gitlab.com/therako/universal-studios/data/rides"
 	"gorm.io/gorm"
 )
 
@@ -15,11 +15,11 @@ func New(ctx context.Context, config Config, gormDB *gorm.DB) *gin.Engine {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	r := rides.Rides{DB: gormDB}
+	r := Rides{DAO: rides.DAO{DB: gormDB}}
 	router.GET("/ride", r.List)
 	router.POST("/ride/add", r.Add)
 
-	c := customers.Customers{DB: gormDB}
+	c := Customers{DAO: customers.DAO{DB: gormDB}}
 	router.GET("/customer", c.List)
 	router.POST("/customer/enter", c.Enter)
 	router.POST("/customer/exit", c.Exit)

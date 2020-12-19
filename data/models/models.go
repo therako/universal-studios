@@ -10,7 +10,11 @@ type Model struct {
 	DeletedAt *time.Time `gorm:"column:deleted_at" json:"deleted_at"`
 }
 
-// Timep is there since time can't be null in go without a pointer
-func Timep(v time.Time) *time.Time {
+// TimeP is there since time can't be null in go without a pointer
+func TimeP(v time.Time) *time.Time {
+	return &v
+}
+
+func UintP(v uint) *uint {
 	return &v
 }
