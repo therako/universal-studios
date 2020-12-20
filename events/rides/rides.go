@@ -36,10 +36,9 @@ func init() {
 
 // RideState represents a ride's current state
 type RideState struct {
-	UpdatedAt time.Time
-
-	QueueCount        uint
-	EstimatedWaitTill time.Time
+	UpdatedAt         time.Time `json:"update_at"`
+	QueueCount        uint      `json:"queue_count"`
+	EstimatedWaitTill time.Time `json:"estimated_wait_till"`
 }
 
 func (s *RideState) calculateNewWait(ride *ridesData.Ride, isReduced bool) {
@@ -145,6 +144,13 @@ func aggregateState(db *gorm.DB, ride *ridesData.Ride) (state *RideState, err er
 	}
 
 	newState.UpdatedAt = time.Now()
-	Cache.Set(strconv.Itoa(int(ride.ID)), newState, 0)
+	if newState.EstimatedWaitTill.After(time.Now()) {
+		// Since every at end of each batch we need to re-calculate wait time
+		timeRemainingToNextBatchStart := newState.EstimatedWaitTill.Sub(time.Now()) % ride.RideTime
+		Cache.SetWithTTL(strconv.Itoa(int(ride.ID)), newState, 0, timeRemainingToNextBatchStart)
+	} else {
+		// Cache till next person is on the queue
+		Cache.Set(strconv.Itoa(int(ride.ID)), newState, 0)
+	}
 	return newState, nil
 }

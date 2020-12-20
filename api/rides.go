@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gitlab.com/therako/universal-studios/data/rides"
+	ridesEvents "gitlab.com/therako/universal-studios/events/rides"
 )
 
 type Rides struct {
@@ -20,6 +21,21 @@ func (r Rides) List(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		log.Println(err)
 		return
+	}
+
+	for idx, ride := range rides {
+		rideState, err := ridesEvents.GetCurrentState(r.DAO.DB, ride)
+		if err == nil {
+			waitTime := time.Duration(0)
+			if !rideState.EstimatedWaitTill.IsZero() {
+				waitTime = rideState.EstimatedWaitTill.Sub(time.Now())
+			}
+			if waitTime < 0 {
+				waitTime = 0
+			}
+			rides[idx].EstimatedWaitingTime = waitTime
+			rides[idx].InQueue = rideState.QueueCount
+		}
 	}
 
 	c.JSON(http.StatusOK, rides)

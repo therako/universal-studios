@@ -18,6 +18,7 @@ func setDefaultConfigs() {
 }
 
 func GetConfig(ctx context.Context) (cfg Config, err error) {
+	viper.SetConfigName("universal-studios")
 	viper.AutomaticEnv()
 	setDefaultConfigs()
 

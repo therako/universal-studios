@@ -6,7 +6,8 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/sqlite"
+	"github.com/spf13/viper"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	"gitlab.com/therako/universal-studios/api"
@@ -24,12 +25,22 @@ func main() {
 		log.Fatalln(ctx, err, "config-init-error")
 	}
 
-	gormDB, err := gorm.Open(sqlite.Open("ustudios.db"), &gorm.Config{})
+	viper.SetDefault("POSTGRES_PORT", 5432)
+	dbDNS := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?statement_timeout=%d&connect_timeout=%d&sslmode=%s",
+		viper.GetString("POSTGRES_USER"),
+		viper.GetString("POSTGRES_PASSWORD"),
+		viper.GetString("POSTGRES_HOST"),
+		viper.GetUint("POSTGRES_PORT"),
+		viper.GetString("POSTGRES_DB"),
+		2000,
+		1,
+		"disable",
+	)
+	gormDB, err := gorm.Open(postgres.Open(dbDNS), &gorm.Config{})
 	if err != nil {
 		log.Fatalln(ctx, err, "connecting-to-db")
 	}
 
-	gormDB.Exec("PRAGMA foreign_keys = ON") // SQLite defaults to `foreign_keys = off'`
 	gormDB.AutoMigrate(&rides.Ride{})
 	gormDB.AutoMigrate(&customers.Customer{})
 	gormDB.AutoMigrate(&events.Event{})

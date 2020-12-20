@@ -21,6 +21,7 @@ var Cache *ristretto.Cache
 var (
 	ErrCustomerCantBeQueue   = errors.New("Customer is already in a queue or riding")
 	ErrCustomerCantBeUnQueue = errors.New("Customer is not in any queue")
+	ErrCustomerAlreadyExited = errors.New("Customer already exited, but a new entry ticket to queue for rides")
 )
 
 func init() {
@@ -37,11 +38,11 @@ func init() {
 
 // CustomerState represents a customers current state
 type CustomerState struct {
-	Queueing  bool
-	RideID    uint
-	From      time.Time
-	To        time.Time
-	UpdatedAt time.Time
+	Queueing  bool      `json:"queueing"`
+	RideID    uint      `json:"ride_id"`
+	From      time.Time `json:"from"`
+	To        time.Time `json:"to"`
+	UpdatedAt time.Time `json:"update_at"`
 }
 
 // GetCurrentState from cache or calculate using events from DB
@@ -64,6 +65,10 @@ func GetCurrentState(db *gorm.DB, customer *customersData.Customer) (state *Cust
 
 // LogCustomerInQueue validates and adds customer to queue of the ride
 func LogCustomerInQueue(db *gorm.DB, customer *customersData.Customer, ride *ridesData.Ride) (err error) {
+	if customer.ExitAt != nil && customer.ExitAt.Before(time.Now()) {
+		return ErrCustomerAlreadyExited
+	}
+
 	var state *CustomerState
 	state, err = GetCurrentState(db, customer)
 	if err != nil {
@@ -101,6 +106,10 @@ func LogCustomerInQueue(db *gorm.DB, customer *customersData.Customer, ride *rid
 
 // LogCustomerLeftAQueue validates and removes customer from queue of the ride
 func LogCustomerLeftAQueue(db *gorm.DB, customer *customersData.Customer) (err error) {
+	if customer.ExitAt != nil && customer.ExitAt.Before(time.Now()) {
+		return ErrCustomerAlreadyExited
+	}
+
 	var state *CustomerState
 	state, err = GetCurrentState(db, customer)
 	if err != nil {

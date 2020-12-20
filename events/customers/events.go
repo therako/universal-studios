@@ -44,6 +44,14 @@ func (e CustomerQueued) ToDBEvent() (*events.Event, error) {
 }
 
 func (e CustomerQueued) Aggregate(state *CustomerState) {
+	if e.To.Before(time.Now()) {
+		state.Queueing = false
+		state.RideID = 0
+		state.From = time.Now()
+		state.To = time.Time{}
+		return
+	}
+
 	state.Queueing = true
 	state.RideID = e.Ride.ID
 	state.From = e.From

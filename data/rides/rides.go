@@ -17,8 +17,12 @@ type Ride struct {
 	models.Model
 	Name     string        `gorm:"column:name" json:"name"`
 	Desc     string        `gorm:"column:desc" json:"desc"`
-	RideTime time.Duration `gorm:"column:ride_time" json:"ride_time"`
+	RideTime time.Duration `gorm:"column:ride_time" json:"ride_time_in_ns"`
 	Capacity uint          `gorm:"column:capacity" json:"capacity"`
+
+	// Calcualted from state not in DB
+	EstimatedWaitingTime time.Duration `json:"waiting_time_in_ns"`
+	InQueue              uint          `json:"in_queue_count"`
 }
 
 // DAO is data access object for rides
