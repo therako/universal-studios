@@ -47,15 +47,22 @@ func (s *RideState) calculateNewWait(ride *ridesData.Ride, isReduced bool) {
 	}
 
 	batches := (s.QueueCount / ride.Capacity)
+	if batches == 0 {
+		s.EstimatedWaitTill = Clock.Now()
+		return
+	}
+
 	remainingSeatsInCurrentBatch := (s.QueueCount % ride.Capacity)
 	if !isReduced && remainingSeatsInCurrentBatch == 0 && batches >= 1 {
 		// Filled capacity by another batch in the queue, add ride time for the estimated_wait
 		s.EstimatedWaitTill = s.EstimatedWaitTill.Add(ride.RideTime)
+		return
 	}
 
 	if isReduced && remainingSeatsInCurrentBatch == ride.Capacity-1 {
 		// A seat got vacated in the previous batch due to some one leaving the queue
 		s.EstimatedWaitTill = s.EstimatedWaitTill.Add(-ride.RideTime)
+		return
 	}
 
 	if s.EstimatedWaitTill.Before(Clock.Now()) {

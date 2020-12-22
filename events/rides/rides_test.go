@@ -84,3 +84,31 @@ func TestE2ERideWaitEstimates(t *testing.T) {
 	assert.DeepEqual(t, ts, state.EstimatedWaitTill)
 	assert.DeepEqual(t, uint(0), state.QueueCount)
 }
+
+func TestRideWaitEstimatesAfterBatchOfCustomerExits(t *testing.T) {
+	db := testDB(t.Name())
+	ts := time.Now()
+	rides.Clock = clockwork.NewFakeClockAt(ts)
+	ride := &ridesData.Ride{Model: models.Model{ID: 123}, Name: "ride1", Capacity: 2, RideTime: 1 * time.Minute}
+	customer := &customers.Customer{Model: models.Model{ID: 111}}
+
+	for i := 0; i < 10; i++ {
+		rides.LogCustomerJoinedRideQueue(db, ride, customer)
+	}
+
+	wait := ts.Add(time.Duration(ride.RideTime.Seconds()*10/2) * time.Second)
+	state, _ := rides.GetCurrentState(db, ride)
+	assert.Equal(t, wait, state.EstimatedWaitTill)
+
+	// After a batch is over for the ride
+	ts = ts.Add(ride.RideTime)
+	wait = ts.Add(time.Duration(ride.RideTime.Seconds()*8/2) * time.Second)
+	state, _ = rides.GetCurrentState(db, ride)
+	assert.Equal(t, wait, state.EstimatedWaitTill)
+
+	// After two batch is over for the ride
+	ts = ts.Add(ride.RideTime * 2)
+	wait = ts.Add(time.Duration(ride.RideTime.Seconds()*4/2) * time.Second)
+	state, _ = rides.GetCurrentState(db, ride)
+	assert.Equal(t, wait, state.EstimatedWaitTill)
+}
